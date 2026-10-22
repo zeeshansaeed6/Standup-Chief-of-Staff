@@ -71,17 +71,23 @@ export class MockProvider implements GitHubProvider {
 
     const filterRepos = (r: string) => (!repos || repos.length === 0 || repos.includes(r));
 
+    const isMe = (user?: string) => {
+      if (!user) return false;
+      const u = user.toLowerCase();
+      return u === this.currentUser || u === "alex-dev";
+    };
+
     const prs = allPrs.filter((p) => {
       if (!filterRepos(p.repo)) return false;
-      const isAuthor = p.author.toLowerCase() === this.currentUser;
-      const isAssignee = p.assignees.some((a) => a.toLowerCase() === this.currentUser);
-      const isReviewer = p.requestedReviewers.some((r) => r.toLowerCase() === this.currentUser);
+      const isAuthor = isMe(p.author);
+      const isAssignee = p.assignees.some(isMe);
+      const isReviewer = p.requestedReviewers.some(isMe);
       return isAuthor || isAssignee || isReviewer;
     });
 
     const issues = allIssues.filter((i) => {
       if (!filterRepos(i.repo)) return false;
-      const isAssignee = i.assignees.some((a) => a.toLowerCase() === this.currentUser);
+      const isAssignee = i.assignees.some(isMe);
       const isBlocked = !!i.blockedWaitingOnMe;
       return isAssignee || isBlocked;
     });
@@ -101,7 +107,10 @@ export class MockProvider implements GitHubProvider {
     const allPrs = this.resolvePullRequests();
     return allPrs.filter((p) => {
       if (repos && repos.length > 0 && !repos.includes(p.repo)) return false;
-      return p.requestedReviewers.some((r) => r.toLowerCase() === this.currentUser);
+      return p.requestedReviewers.some((r) => {
+        const u = r.toLowerCase();
+        return u === this.currentUser || u === "alex-dev";
+      });
     });
   }
 

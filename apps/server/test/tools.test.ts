@@ -11,7 +11,7 @@ describe("MCP Tools End-to-End Suite against MockProvider", () => {
   });
 
   it("1. get_blockers returns ranked blockers and a spoken briefing", async () => {
-    const { data, spoken } = await handleGetBlockers({ limit: 5 });
+    const { data, spoken } = await handleGetBlockers({ limit: 5, demo: true });
     expect(data.blockers.length).toBeGreaterThanOrEqual(1);
     expect(spoken).toBeDefined();
     expect(data.briefing).toBe(spoken);
@@ -67,7 +67,7 @@ describe("MCP Tools End-to-End Suite against MockProvider", () => {
 
   it("4. snooze_issue two-phase confirmation and exclusion from get_blockers", async () => {
     // Verify issue 42 exists initially in blockers
-    const initial = await handleGetBlockers({ limit: 10 });
+    const initial = await handleGetBlockers({ limit: 10, demo: true });
     const has42Initially = initial.data.blockers.some(
       (b) => b.repo === "acme/payments-platform" && b.number === 42
     );
@@ -97,7 +97,7 @@ describe("MCP Tools End-to-End Suite against MockProvider", () => {
       expect(phase2.data.status).toBe("snoozed");
 
       // Verify issue 42 is now excluded from blockers
-      const afterSnooze = await handleGetBlockers({ limit: 10 });
+      const afterSnooze = await handleGetBlockers({ limit: 10, demo: true });
       const has42After = afterSnooze.data.blockers.some(
         (b) => b.repo === "acme/payments-platform" && b.number === 42
       );

@@ -43,6 +43,26 @@ export function parseIntent(
   context: SessionContext = {},
   requireWakeWord: boolean = false
 ): ParsedIntent {
+  const isPending = Boolean(context.pendingConfirmation);
+  const rawLower = rawUtterance.trim().toLowerCase();
+
+  // When Alexa is actively waiting for confirmation ("Should I send it?"),
+  // follow-up responses do not require repeating the wake word.
+  if (isPending) {
+    if (/^(alexa\s+)?(yes|yeah|yep|send it|confirm|go ahead|do it|sure|sounds good|proceed)\b/i.test(rawLower)) {
+      return {
+        type: "confirm",
+        originalUtterance: rawUtterance,
+      };
+    }
+    if (/^(alexa\s+)?(no|nope|cancel|never mind|stop|don't send|abort)\b/i.test(rawLower)) {
+      return {
+        type: "cancel",
+        originalUtterance: rawUtterance,
+      };
+    }
+  }
+
   const utterance = cleanUtterance(rawUtterance, requireWakeWord);
   if (!utterance && requireWakeWord) {
     return {

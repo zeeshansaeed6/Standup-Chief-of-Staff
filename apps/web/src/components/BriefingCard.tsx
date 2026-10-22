@@ -97,8 +97,17 @@ export const BriefingCard: React.FC<BriefingCardProps> = ({
       </div>
 
       {/* Blockers Cards List */}
-      <div className="space-y-3">
-        {data.blockers.map((item: Blocker, index: number) => {
+      {data.blockers.length === 0 ? (
+        <div className="bg-slate-950/60 border border-emerald-900/40 rounded-xl p-6 text-center">
+          <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+          <h4 className="text-sm font-bold text-white mb-1">Zero Blockers Detected!</h4>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            You're completely in the clear. No failing CI runs, no stale review requests, and no overdue issues on your monitored GitHub repositories.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {data.blockers.map((item: Blocker, index: number) => {
           const isPr = item.type === "pr" || item.type === "review_request";
           return (
             <div
@@ -208,7 +217,8 @@ export const BriefingCard: React.FC<BriefingCardProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

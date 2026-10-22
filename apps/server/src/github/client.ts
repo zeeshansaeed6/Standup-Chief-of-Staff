@@ -123,6 +123,9 @@ export class LiveGitHubProvider implements GitHubProvider {
   }
 
   public async getPullRequest(repo: string, number: number): Promise<PullRequest | null> {
+    if (repo.startsWith("acme/")) {
+      return this.mockFallback.getPullRequest(repo, number);
+    }
     const [owner, name] = repo.split("/");
     if (!owner || !name) return null;
 
@@ -191,23 +194,28 @@ export class LiveGitHubProvider implements GitHubProvider {
     number: number,
     body: string
   ): Promise<{ id: number | string; url: string; simulated?: boolean }> {
-    if (!config.LIVE_WRITES) {
+    if (!config.LIVE_WRITES || repo.startsWith("acme/")) {
       return this.mockFallback.commentOnPullRequest(repo, number, body);
     }
 
-    const [owner, name] = repo.split("/");
-    const { data: comment } = await this.octokit.issues.createComment({
-      owner,
-      repo: name,
-      issue_number: number,
-      body,
-    });
+    try {
+      const [owner, name] = repo.split("/");
+      const { data: comment } = await this.octokit.issues.createComment({
+        owner,
+        repo: name,
+        issue_number: number,
+        body,
+      });
 
-    return {
-      id: comment.id,
-      url: comment.html_url,
-      simulated: false,
-    };
+      return {
+        id: comment.id,
+        url: comment.html_url,
+        simulated: false,
+      };
+    } catch (err) {
+      console.warn(`[LiveGitHubProvider] Error commenting on ${repo}#${number}, falling back to simulation:`, err);
+      return this.mockFallback.commentOnPullRequest(repo, number, body);
+    }
   }
 
   public async addLabelAndComment(
@@ -216,30 +224,41 @@ export class LiveGitHubProvider implements GitHubProvider {
     label: string,
     comment: string
   ): Promise<{ simulated?: boolean }> {
-    if (!config.LIVE_WRITES) {
+    if (!config.LIVE_WRITES || repo.startsWith("acme/")) {
       return this.mockFallback.addLabelAndComment(repo, number, label, comment);
     }
 
-    const [owner, name] = repo.split("/");
-    await this.octokit.issues.addLabels({
-      owner,
-      repo: name,
-      issue_number: number,
-      labels: [label],
-    });
+    try {
+      const [owner, name] = repo.split("/");
+      await this.octokit.issues.addLabels({
+        owner,
+        repo: name,
+        issue_number: number,
+        labels: [label],
+      });
 
-    await this.octokit.issues.createComment({
-      owner,
-      repo: name,
-      issue_number: number,
-      body: comment,
-    });
+      await this.octokit.issues.createComment({
+        owner,
+        repo: name,
+        issue_number: number,
+        body: comment,
+      });
 
-    return { simulated: false };
+      return { simulated: false };
+    } catch (err) {
+      console.warn(`[LiveGitHubProvider] Error snoozing ${repo}#${number}, falling back to simulation:`, err);
+      return this.mockFallback.addLabelAndComment(repo, number, label, comment);
+    }
   }
 }
 
-export function createGitHubProvider(): { provider: GitHubProvider; degraded?: string } {
+export function createGitHubProvider(forceMock: boolean = false): { provider: GitHubProvider; degraded?: string } {
+  if (forceMock) {
+    return {
+      provider: new MockProvider(config.GITHUB_USER),
+      degraded: "Demo board (Acme Payments fixtures)",
+    };
+  }
   if (config.DATA_MODE === "live") {
     if (!config.GITHUB_TOKEN) {
       console.warn("⚠️ DATA_MODE=live requested, but GITHUB_TOKEN is empty. Gracefully degrading to MockProvider.");

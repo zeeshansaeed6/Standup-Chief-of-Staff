@@ -40,6 +40,7 @@ export function App() {
 
   const [requireWakeWord, setRequireWakeWord] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [scenario, setScenario] = useState<"demo" | "live">("demo");
   const [blockersResult, setBlockersResult] = useState<GetBlockersResult | null>(null);
   const [prSummaryResult, setPrSummaryResult] = useState<SummarizePrResult | null>(null);
 
@@ -81,9 +82,55 @@ export function App() {
     ]);
   }, []);
 
+  // Dedicated direct handlers for the Confirmation Modal buttons
+  const handleConfirmAction = useCallback(async () => {
+    if (!pendingConfirmation) return;
+    const { action, payload, id: confId } = pendingConfirmation;
+
+    cancelSpeech();
+    addMessage("user", "Yes, confirm and send");
+    setIsProcessing(true);
+
+    try {
+      const res = await callTool(action, {
+        ...payload,
+        confirm: true,
+        confirmationId: confId,
+      });
+
+      addMessage("assistant", res.spoken);
+      speak(res.spoken);
+
+      if (action === "snooze_issue") {
+        const refreshed = await callTool("get_blockers", {
+          limit: 5,
+          demo: scenario === "demo",
+        });
+        setBlockersResult(refreshed.data);
+      }
+    } catch (err: any) {
+      const errorReply = `Error: ${err.message || "Failed to execute MCP command"}`;
+      addMessage("assistant", errorReply);
+      speak(`Sorry, I encountered an error: ${err.message}`);
+    } finally {
+      setPendingConfirmation(null);
+      setIsProcessing(false);
+    }
+  }, [pendingConfirmation, scenario, cancelSpeech, addMessage, callTool, speak]);
+
+  const handleCancelAction = useCallback(() => {
+    cancelSpeech();
+    setPendingConfirmation(null);
+    setIsProcessing(false);
+    const reply = "Cancelled the action.";
+    addMessage("user", "Cancel");
+    addMessage("assistant", reply);
+    speak(reply);
+  }, [cancelSpeech, addMessage, speak]);
+
   // Main Utterance Handler
   const handleUtterance = useCallback(
-    async (rawUtterance: string) => {
+    async (rawUtterance: string, forceScenario?: "demo" | "live") => {
       if (!rawUtterance.trim() || isProcessing) return;
 
       cancelSpeech();
@@ -91,6 +138,7 @@ export function App() {
       setIsProcessing(true);
 
       const intent = parseIntent(rawUtterance, sessionContext, requireWakeWord);
+      const activeScenario = forceScenario || scenario;
 
       try {
         switch (intent.type) {
@@ -103,40 +151,43 @@ export function App() {
             }
 
             const { action, payload, id: confId } = pendingConfirmation;
-            const res = await callTool(action, {
-              ...payload,
-              confirm: true,
-              confirmationId: confId,
-            });
+            try {
+              const res = await callTool(action, {
+                ...payload,
+                confirm: true,
+                confirmationId: confId,
+              });
 
-            setPendingConfirmation(null);
-            addMessage("assistant", res.spoken);
-            speak(res.spoken);
+              addMessage("assistant", res.spoken);
+              speak(res.spoken);
 
-            // If snooze was confirmed, refresh blockers board to show item vanished
-            if (action === "snooze_issue") {
-              const refreshed = await callTool("get_blockers", { limit: 5 });
-              setBlockersResult(refreshed.data);
+              // If snooze was confirmed, refresh blockers board to show item vanished
+              if (action === "snooze_issue") {
+                const refreshed = await callTool("get_blockers", {
+                  limit: 5,
+                  demo: activeScenario === "demo",
+                });
+                setBlockersResult(refreshed.data);
+              }
+            } finally {
+              setPendingConfirmation(null);
             }
             break;
           }
 
           case "cancel": {
-            if (pendingConfirmation) {
-              setPendingConfirmation(null);
-              const reply = "Cancelled the action.";
-              addMessage("assistant", reply);
-              speak(reply);
-            } else {
-              const reply = "No pending action to cancel.";
-              addMessage("assistant", reply);
-              speak(reply);
-            }
+            setPendingConfirmation(null);
+            const reply = "Cancelled the action.";
+            addMessage("assistant", reply);
+            speak(reply);
             break;
           }
 
           case "get_blockers": {
-            const res = await callTool("get_blockers", intent.args || { limit: 5 });
+            const res = await callTool("get_blockers", {
+              ...(intent.args || { limit: 5 }),
+              demo: activeScenario === "demo",
+            });
             setBlockersResult(res.data);
             addMessage("assistant", res.spoken);
             speak(res.spoken);
@@ -224,8 +275,22 @@ export function App() {
       pendingConfirmation,
       callTool,
       speak,
+      scenario,
     ]
   );
+
+  // Automatically fetch blockers on initial connection
+  useEffect(() => {
+    if (connected && !blockersResult) {
+      callTool("get_blockers", { limit: 5, demo: scenario === "demo" })
+        .then((res) => {
+          setBlockersResult(res.data);
+        })
+        .catch((err) => {
+          console.warn("Initial blockers fetch failed:", err);
+        });
+    }
+  }, [connected]);
 
   // Speech Recognition Hook
   const {
@@ -265,6 +330,48 @@ export function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Voice Orb, Quick Chips & Action Cards */}
         <section className="lg:col-span-7 flex flex-col gap-6">
+          {/* Data Source / Demo Scenario Toggle Bar */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-semibold text-slate-300">Data Source:</span>
+              <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScenario("demo");
+                    handleUtterance("What's blocking me today?", "demo");
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    scenario === "demo"
+                      ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 shadow-md font-bold"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Demo Scenario (Acme Team #128)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScenario("live");
+                    handleUtterance("What's blocking me today?", "live");
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    scenario === "live"
+                      ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 shadow-md font-bold"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Live GitHub (@zeeshansaeed6)
+                </button>
+              </div>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              {scenario === "demo"
+                ? "Simulating PR #128, Priya Sharma, & Issue #42"
+                : "Real repos: Portfolio, my-app, github_accio"}
+            </span>
+          </div>
+
           {/* Voice Orb Console Card */}
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
             {/* Ambient Background Light */}
@@ -289,7 +396,7 @@ export function App() {
             {/* Quick Chips */}
             <div className="mt-4 w-full">
               <QuickChips
-                onSelectChip={handleUtterance}
+                onSelectChip={(text) => handleUtterance(text)}
                 disabled={!connected || isProcessing}
               />
             </div>
@@ -352,8 +459,8 @@ export function App() {
         <ActionConfirmModal
           preview={pendingConfirmation.preview}
           spokenPrompt={pendingConfirmation.spokenPrompt}
-          onConfirm={() => handleUtterance("Yes, send it")}
-          onCancel={() => handleUtterance("Cancel")}
+          onConfirm={handleConfirmAction}
+          onCancel={handleCancelAction}
           isExecuting={isProcessing}
         />
       )}

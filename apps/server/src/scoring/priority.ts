@@ -21,10 +21,13 @@ export function scorePullRequest(
   const reasons: string[] = [];
   const waitingOn: string[] = [];
 
-  const isAuthor = pr.author.toLowerCase() === currentUser.toLowerCase();
-  const isReviewRequestedFromMe = pr.requestedReviewers.some(
-    (r) => r.toLowerCase() === currentUser.toLowerCase()
-  );
+  const matchUser = (u: string) => {
+    const lower = u.toLowerCase();
+    return lower === currentUser.toLowerCase() || (lower === "alex-dev" && pr.repo.startsWith("acme/"));
+  };
+
+  const isAuthor = matchUser(pr.author);
+  const isReviewRequestedFromMe = pr.requestedReviewers.some(matchUser);
 
   const createdAt = new Date(pr.createdAt).getTime();
   const ageHours = Math.max(0, Math.round((Date.now() - createdAt) / (1000 * 60 * 60)));
@@ -132,9 +135,12 @@ export function scoreIssue(
   const reasons: string[] = [];
   const waitingOn: string[] = [];
 
-  const isAssignedToMe = issue.assignees.some(
-    (a) => a.toLowerCase() === currentUser.toLowerCase()
-  );
+  const matchUser = (u: string) => {
+    const lower = u.toLowerCase();
+    return lower === currentUser.toLowerCase() || (lower === "alex-dev" && issue.repo.startsWith("acme/"));
+  };
+
+  const isAssignedToMe = issue.assignees.some(matchUser);
 
   const createdAt = new Date(issue.createdAt).getTime();
   const ageHours = Math.max(0, Math.round((Date.now() - createdAt) / (1000 * 60 * 60)));

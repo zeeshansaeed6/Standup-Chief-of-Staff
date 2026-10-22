@@ -42,7 +42,10 @@ export class BedrockAssistantService {
     this.mode = config.BEDROCK_MODE;
     if (this.mode === "live") {
       try {
-        const clientConfig: any = { region: config.AWS_REGION };
+        const clientConfig: any = {
+          region: config.AWS_REGION,
+          maxAttempts: 1,
+        };
         if (config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY) {
           clientConfig.credentials = {
             accessKeyId: config.AWS_ACCESS_KEY_ID,

@@ -13,15 +13,18 @@ export const getBlockersInputSchema = {
   repos: z.array(z.string()).optional().describe("Optional list of repo names in owner/name format"),
   limit: z.number().int().min(1).max(10).default(5).optional().describe("Maximum number of blockers to return (default 5, max 10)"),
   includeSnoozed: z.boolean().default(false).optional().describe("Whether to include snoozed items"),
+  demo: z.boolean().default(false).optional().describe("Force demo scenario (Acme Payments fixtures) for testing"),
 };
 
 export async function handleGetBlockers(args: {
   repos?: string[];
   limit?: number;
   includeSnoozed?: boolean;
+  demo?: boolean;
 }): Promise<{ data: GetBlockersResult; spoken: string }> {
-  const { repos, limit = 5, includeSnoozed = false } = args;
-  const { provider, degraded: providerDegraded } = createGitHubProvider();
+  const { repos, limit = 5, includeSnoozed = false, demo = false } = args;
+  const isDemo = Boolean(demo) || (repos && repos.some((r) => r.toLowerCase().startsWith("acme/")));
+  const { provider, degraded: providerDegraded } = createGitHubProvider(isDemo);
 
   // 1. Fetch assigned work
   const { pullRequests, issues } = await provider.listAssignedWork(repos);
