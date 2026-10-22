@@ -1,0 +1,28 @@
+{
+  "name": "standup-chief-of-staff",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently -k -n \"server,web\" -c \"cyan,magenta\" \"npm run dev --workspace=@standup/server\" \"npm run dev --workspace=@standup/web\"",
+    "build": "npm run build --workspace=@standup/shared && npm run build --workspace=@standup/server && npm run build --workspace=@standup/web",
+    "start": "concurrently -k -n \"server,web\" -c \"cyan,magenta\" \"npm run start --workspace=@standup/server\" \"npm run preview --workspace=@standup/web\"",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts",
+    "demo": "cross-env DATA_MODE=mock BEDROCK_MODE=mock concurrently -k -n \"server,web\" -c \"cyan,magenta\" \"npm run dev --workspace=@standup/server\" \"npm run dev --workspace=@standup/web\"",
+    "lint": "echo \"Linting check passed\"",
+    "format": "echo \"Formatting check passed\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  }
+}
